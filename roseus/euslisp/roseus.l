@@ -56,8 +56,9 @@
       (ros::set-logger-level logger level)
       )))
 
-(defparameter ros::*compile-message* nil)
-(defparameter ros::*compile* nil)
+;; see https://github.com/jsk-ros-pkg/jsk_roseus/pull/464 for discussion
+(defparameter ros::*compile-message* nil) ;; compile msg/srv when loaded
+(defparameter ros::*compile* nil)         ;; compile msg/srv and files start with package://
 
 (shadow 'object *package*)
 (defclass ros::object
