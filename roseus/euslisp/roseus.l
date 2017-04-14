@@ -198,9 +198,12 @@
 				     :key #'lisp::load-module-file-name
 				     :test #'equal)))
               (unless old-module
-                (comp::compile-file-if-src-newer dirfile (format nil "~A/~A_~A" dir pkg fname))
-                (load-org-for-ros (format nil "~A/~A_~A.so" dir pkg fname)
-                                  :entry (format nil "___~A" fname))
+                (let* ((ppath (unix::getenv "CMAKE_PREFIX_PATH"))
+                       (dir (format nil "~A/share/roseus/ros/~A" (subseq ppath 0 (position #\: ppath)) pkg)))
+                  (unless (probe-file dir) (unix:mkdir dir))
+                  (comp::compile-file-if-src-newer dirfile (format nil "~A/~A_~A" dir pkg fname))
+                  (load-org-for-ros (format nil "~A/~A_~A.so" dir pkg fname)
+                                    :entry (format nil "___~A" fname)))
                 ))
 	    (in-package "USER"))
 	    )))))
