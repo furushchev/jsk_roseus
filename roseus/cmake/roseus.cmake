@@ -157,7 +157,12 @@ macro(generate_all_roseus_messages)
     if(${PROJECT_NAME} STREQUAL "roseus") # this is only for roseus package
       set(_roseus_exe ${PROJECT_SOURCE_DIR}/bin/roseus)
     endif()
+    string(ASCII 27 Esc)
+    set(ColourReset "${Esc}[m")
+    set(ColourBold  "${Esc}[1m")
+    set(Green       "${Esc}[32m")
     add_custom_target(${target_pkg}_generate_messages_eus_compile_message ALL
+      COMMAND echo "${Green}compile message file ${target_pkg}${ColourReset}"
       COMMAND DISPLAY= ROS_PACKAGE_PATH=${_ROS_PACKAGE_PATH} CMAKE_PREFIX_PATH=${_CMAKE_PREFIX_PATH} ${_roseus_exe} ${_generate_eus_compile_messaege_command}
       DEPENDS ${target_pkg}_generate_messages_eus)
   endif()
