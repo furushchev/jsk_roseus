@@ -56,8 +56,9 @@
       (ros::set-logger-level logger level)
       )))
 
-(defparameter ros::*compile-message* nil)
-(defparameter ros::*compile* nil)
+;; see https://github.com/jsk-ros-pkg/jsk_roseus/pull/464 for discussion
+(defparameter ros::*compile-message* nil) ;; compile msg/srv when loaded
+(defparameter ros::*compile* nil)         ;; compile msg/srv and files start with package://
 
 (shadow 'object *package*)
 (defclass ros::object
@@ -186,20 +187,29 @@
     (dolist (file (directory dir))
       (when (and (string= (pathname-type file) "l")
 		 (not (= #\. (elt (pathname-name file) 0))))
-	(let ((dirfile (concatenate string dir file))
-              (modname (intern (string-upcase (format nil "~A/~A" pkg (pathname-name file))) *keyword-package*)))
-	  (require modname dirfile)
-          (when (or ros::*compile-message* ros::*compile*)
+	(let* ((dirfile (concatenate string dir file))
+               (modname (intern (string-upcase (format nil "~A/~A" pkg (pathname-name file))) *keyword-package*))
+               (fname (pathname-name dirfile))
+               (ppath (unix::getenv "CMAKE_PREFIX_PATH"))
+               (prefix-path (subseq ppath 0 (position #\: ppath)))
+               (dir (format nil "~A/share/roseus/ros/~A" prefix-path pkg)))
+          (require modname dirfile)
+          (when (or (not (file-newer dirfile (format nil "~A/~A_~A.so" dir pkg fname))) ;; when messages are already compiled in cmake process and not old
+                    ros::*compile-message* ros::*compile*)
 	    (in-package "ROS")
-	    (let* ((fname (pathname-name dirfile))
-		   (old-module (find (format nil "~A_~A" pkg fname)
+	    (let* ((old-module (find (format nil "~A_~A" pkg fname)
 				     *loaded-modules*
 				     :key #'lisp::load-module-file-name
 				     :test #'equal)))
               (unless old-module
-                (comp::compile-file-if-src-newer dirfile (format nil "~A/~A_~A" dir pkg fname))
-                (load-org-for-ros (format nil "~A/~A_~A.so" dir pkg fname)
-                                  :entry (format nil "___~A" fname))
+                (let* ()
+                  (unless (probe-file (format nil "~A/share" prefix-path)) (unix:mkdir (format nil "~A/share" prefix-path)))
+                  (unless (probe-file (format nil "~A/share/roseus" prefix-path)) (unix:mkdir (format nil "~A/share/roseus" prefix-path)))
+                  (unless (probe-file (format nil "~A/share/roseus/ros" prefix-path)) (unix:mkdir (format nil "~A/share/roseus/ros" prefix-path)))
+                  (unless (probe-file dir) (unix:mkdir dir))
+                  (comp::compile-file-if-src-newer dirfile (format nil "~A/~A_~A" dir pkg fname))
+                  (load-org-for-ros (format nil "~A/~A_~A.so" dir pkg fname)
+                                    :entry (format nil "___~A" fname)))
                 ))
 	    (in-package "USER"))
 	    )))))
@@ -236,7 +246,11 @@
                                  :test #'equal)))
           (unless old-module
             (let* ((ppath (unix::getenv "CMAKE_PREFIX_PATH"))
-                   (dir (format nil "~A/share/roseus/ros/~A" (subseq ppath 0 (position #\: ppath)) package-name)))
+                   (prefix-path (subseq ppath 0 (position #\: ppath)))
+                   (dir (format nil "~A/share/roseus/ros/~A" prefix-path package-name)))
+              (unless (probe-file (format nil "~A/share" prefix-path)) (unix:mkdir (format nil "~A/share" prefix-path)))
+              (unless (probe-file (format nil "~A/share/roseus" prefix-path)) (unix:mkdir (format nil "~A/share/roseus" prefix-path)))
+              (unless (probe-file (format nil "~A/share/roseus/ros" prefix-path)) (unix:mkdir (format nil "~A/share/roseus/ros" prefix-path)))
               (unless (probe-file dir) (unix:mkdir dir))
               (comp::compile-file-if-src-newer fullname (format nil "~A/~A" dir path-name))
               (return-from load (load-org-for-ros (format nil "~A/~A.so" dir path-name)
@@ -357,7 +371,9 @@ always the rank of list is 2"
     (setq dirs (nconc dirs (list (format nil "~A/share/roseus/ros" (subseq ppath s)))))
     ;;
     (dolist (dir dirs)
-      (if (probe-file (format nil "~A/~A/" dir pkg))
+      (if (or (probe-file (format nil "~A/~A/manifest.l" dir pkg))
+              (probe-file (format nil "~A/~A/msg" dir pkg))
+              (probe-file (format nil "~A/~A/srv" dir pkg)))
           (return-from ros::find-load-msg-path (format nil "~A/~A" dir pkg))))
     (ros::ros-error "Could not find roseus messages for ~A under ~A~%try rosrun roseus generate-all-msg-srv.sh ~A" pkg dirs pkg)
     nil))
