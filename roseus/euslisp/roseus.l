@@ -191,7 +191,8 @@
                (modname (intern (string-upcase (format nil "~A/~A" pkg (pathname-name file))) *keyword-package*))
                (fname (pathname-name dirfile))
                (ppath (unix::getenv "CMAKE_PREFIX_PATH"))
-               (dir (format nil "~A/share/roseus/ros/~A" (subseq ppath 0 (position #\: ppath)) pkg)))
+               (prefix-path (subseq ppath 0 (position #\: ppath)))
+               (dir (format nil "~A/share/roseus/ros/~A" prefix-path pkg)))
           (require modname dirfile)
           (when (or (not (file-newer dirfile (format nil "~A/~A_~A.so" dir pkg fname))) ;; when messages are already compiled in cmake process and not old
                     ros::*compile-message* ros::*compile*)
@@ -202,6 +203,9 @@
 				     :test #'equal)))
               (unless old-module
                 (let* ()
+                  (unless (probe-file (format nil "~A/share" prefix-path)) (unix:mkdir (format nil "~A/share" prefix-path)))
+                  (unless (probe-file (format nil "~A/share/roseus" prefix-path)) (unix:mkdir (format nil "~A/share/roseus" prefix-path)))
+                  (unless (probe-file (format nil "~A/share/roseus/ros" prefix-path)) (unix:mkdir (format nil "~A/share/roseus/ros" prefix-path)))
                   (unless (probe-file dir) (unix:mkdir dir))
                   (comp::compile-file-if-src-newer dirfile (format nil "~A/~A_~A" dir pkg fname))
                   (load-org-for-ros (format nil "~A/~A_~A.so" dir pkg fname)
@@ -242,7 +246,11 @@
                                  :test #'equal)))
           (unless old-module
             (let* ((ppath (unix::getenv "CMAKE_PREFIX_PATH"))
-                   (dir (format nil "~A/share/roseus/ros/~A" (subseq ppath 0 (position #\: ppath)) package-name)))
+                   (prefix-path (subseq ppath 0 (position #\: ppath)))
+                   (dir (format nil "~A/share/roseus/ros/~A" prefix-path package-name)))
+              (unless (probe-file (format nil "~A/share" prefix-path)) (unix:mkdir (format nil "~A/share" prefix-path)))
+              (unless (probe-file (format nil "~A/share/roseus" prefix-path)) (unix:mkdir (format nil "~A/share/roseus" prefix-path)))
+              (unless (probe-file (format nil "~A/share/roseus/ros" prefix-path)) (unix:mkdir (format nil "~A/share/roseus/ros" prefix-path)))
               (unless (probe-file dir) (unix:mkdir dir))
               (comp::compile-file-if-src-newer fullname (format nil "~A/~A" dir path-name))
               (return-from load (load-org-for-ros (format nil "~A/~A.so" dir path-name)
