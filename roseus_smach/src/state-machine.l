@@ -149,8 +149,11 @@
   ;; 0->this 1->sub 2->subsub ... -1->deepest
   (:execute
    (userdata &key (step nil))
-   (let ((args (mapcar #'(lambda(k)(cons k (cdr (assoc k userdata)))) arg-keys))
-         result)
+   (let (args result)
+     (setq args
+           (if arg-keys
+               (mapcar #'(lambda(k)(cons k (cdr (assoc k userdata)))) arg-keys)
+               userdata))
      (when (null active-state)
        (send self :reset-state))
      (setq result

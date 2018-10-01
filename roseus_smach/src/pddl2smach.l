@@ -58,8 +58,8 @@
                            (intern (string-upcase (car sym)) (find-package ns))))
                    (if use-userdata
                        (setq func
-                             `(lambda-closure nil 0 0 (udata)
-                                              (apply #',(car sym) (append ',(cdr sym) (list udata)))))
+                             `(lambda-closure nil 0 0 (userdata)
+                                              (apply #',(car sym) (append ',(cdr sym) (list userdata)))))
                      (setq func
                            `(lambda-closure nil 0 0 (x) (apply #',(car sym) ',(cdr sym)))))
                    (cond
