@@ -177,6 +177,28 @@
   (:last-duration (&rest args) (user::forward-message-to last-duration args))
   )
 
+(defclass ros::timer
+  :super propertied-object
+  :slots (_timer_id))
+(defmethod ros::timer
+  (:init (duration callback &rest args &key oneshot (autostart t) &allow-other-keys)
+   (sys::dispose-hook self t)
+   (let ((arg-keys (list :oneshot :autostart)))
+     (dotimes (i 2)
+       (when (memq (car (last (butlast args))) arg-keys)
+         (setq arg-keys (remove (find (car (last (butlast args))) arg-keys) arg-keys))
+         (setq args (butlast (butlast args))))))
+   (setq _timer_id
+         (ros::create-timer-raw duration callback args oneshot autostart)))
+  (:dispose () (ros::shutdown-timer-raw _timer_id))
+  (:start () (ros::start-timer-raw _timer_id))
+  (:stop () (ros::stop-timer-raw _timer_id))
+  (:period (duration) (ros::set-timer-period-raw _timer_id duration))
+  (:is-valid () (ros::timer-is-valid-raw _timer_id)))
+
+;; for backward compatibility
+(defun ros::create-timer (duration callback &rest args &key oneshot (autostart t) &allow-other-keys)
+  (instance* ros::timer :init duration callback args))
 
 ;;
 

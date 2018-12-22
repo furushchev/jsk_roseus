@@ -134,7 +134,7 @@ public:
   map<string, boost::shared_ptr<Publisher> > mapAdvertised; ///< advertised topics
   map<string, boost::shared_ptr<Subscriber> > mapSubscribed; ///< subscribed topics
   map<string, boost::shared_ptr<ServiceServer> > mapServiced; ///< subscribed topics
-  map<string, Timer > mapTimered; ///< subscribed timers
+  map<long, Timer > mapTimerd; ///< subscribed timers
 
   map<string, boost::shared_ptr<NodeHandle> > mapHandle; ///< for grouping nodehandle
 };
@@ -146,7 +146,7 @@ static bool s_bInstalled = false;
 #define s_mapAdvertised s_staticdata.mapAdvertised
 #define s_mapSubscribed s_staticdata.mapSubscribed
 #define s_mapServiced s_staticdata.mapServiced
-#define s_mapTimered s_staticdata.mapTimered
+#define s_mapTimerd s_staticdata.mapTimerd
 #define s_mapHandle s_staticdata.mapHandle
 
 pointer K_ROSEUS_MD5SUM,K_ROSEUS_DATATYPE,K_ROSEUS_DEFINITION,K_ROSEUS_CONNECTION_HEADER,K_ROSEUS_SERIALIZATION_LENGTH,K_ROSEUS_SERIALIZE,K_ROSEUS_DESERIALIZE,K_ROSEUS_INIT,K_ROSEUS_GET,K_ROSEUS_REQUEST,K_ROSEUS_RESPONSE,K_ROSEUS_GROUPNAME,K_ROSEUS_ONESHOT,K_ROSEUS_LAST_EXPECTED,K_ROSEUS_LAST_REAL,K_ROSEUS_CURRENT_EXPECTED,K_ROSEUS_CURRENT_REAL,K_ROSEUS_LAST_DURATION,K_ROSEUS_SEC,K_ROSEUS_NSEC,QANON,QNOOUT,QREPOVERSION,QROSDEBUG,QROSINFO,QROSWARN,QROSERROR,QROSFATAL;
@@ -624,7 +624,7 @@ pointer ROSEUS(register context *ctx,int n,pointer *argv)
   s_mapAdvertised.clear();
   s_mapSubscribed.clear();
   s_mapServiced.clear();
-  s_mapTimered.clear();
+  s_mapTimerd.clear();
   s_mapHandle.clear();
 
   /*
@@ -823,7 +823,7 @@ pointer ROSEUS_EXIT(register context *ctx,int n,pointer *argv)
     s_mapAdvertised.clear();
     s_mapSubscribed.clear();
     s_mapServiced.clear();
-    s_mapTimered.clear();
+    s_mapTimerd.clear();
     s_mapHandle.clear();
     ros::shutdown();
   }
@@ -1827,26 +1827,23 @@ public:
   }
 };
 
-pointer ROSEUS_CREATE_TIMER(register context *ctx,int n,pointer *argv)
+pointer ROSEUS_CREATE_TIMER_RAW(register context *ctx,int n,pointer *argv)
 {
   isInstalledCheck;
   numunion nu;
-  bool oneshot = false;
+  bool oneshot = false, autostart = false;
   pointer fncallback = NIL, args;
   NodeHandle *lnode = s_node.get();
   string fncallname;
   float period=ckfltval(argv[0]);
 
-  // period callbackfunc args0 ... argsN [ oneshot ]
-  // ;; oneshot ;;
-  if (n > 1 && issymbol(argv[n-2]) && issymbol(argv[n-1])) {
-    if (argv[n-2] == K_ROSEUS_ONESHOT) {
-      if ( argv[n-1] != NIL ) {
-        oneshot = true;
-      }
-      n -= 2;
-    }
-  }
+  // period callbackfunc [args0 ... argsN or nil] oneshot autostart
+  if (n < 5) { error(E_MISMATCHARG);}
+  if (argv[n-1] != NIL) { autostart = true; }
+  if (argv[n-2] != NIL) { oneshot = true; }
+  n -= 2;
+  if (argv[n-1] == NIL) { n--; }
+
   // ;; functions ;;
   if (piscode(argv[1])) { // compiled code
     fncallback=argv[1];
@@ -1877,12 +1874,94 @@ pointer ROSEUS_CREATE_TIMER(register context *ctx,int n,pointer *argv)
   pointer p=gensym(ctx);
   setval(ctx,intern(ctx,(char*)(p->c.sym.pname->c.str.chars),strlen((char*)(p->c.sym.pname->c.str.chars)),lisppkg),cons(ctx,fncallback,args));
 
-  // ;; store mapTimered
-  ROS_DEBUG("create timer %s at %f (oneshot=%d)", fncallname.c_str(), period, oneshot);
-  s_mapTimered[fncallname] = lnode->createTimer(ros::Duration(period), TimerFunction(fncallback, args), oneshot);
+  // ;; store mapTimerd
+  ROS_DEBUG("create timer %s at %f (oneshot=%d,autostart=%d)", fncallname.c_str(), period, oneshot, autostart);
+  s_mapTimerd[reinterpret_cast<long>(p)] = lnode->createTimer(ros::Duration(period), TimerFunction(fncallback, args), oneshot, autostart);
 
-  return (T);
+  return (p);
 }
+
+pointer ROSEUS_SHUTDOWN_TIMER_RAW(register context *ctx,int n,pointer *argv)
+{
+  isInstalledCheck;
+  ckarg(1);
+  long key = reinterpret_cast<long>(argv[0]);
+  if (s_mapTimerd.find(key) != s_mapTimerd.end()) {
+    s_mapTimerd[key].stop();
+    s_mapTimerd.erase(key);
+    return (T);
+  } else {
+    return (NIL);
+  }
+}
+
+pointer ROSEUS_START_TIMER_RAW(register context *ctx,int n,pointer *argv)
+{
+  isInstalledCheck;
+  ckarg(1);
+  long key = reinterpret_cast<long>(argv[0]);
+  if (s_mapTimerd.find(key) != s_mapTimerd.end()) {
+    s_mapTimerd[key].start();
+    return (T);
+  } else {
+    return (NIL);
+  }
+}
+
+pointer ROSEUS_STOP_TIMER_RAW(register context *ctx,int n,pointer *argv)
+{
+  isInstalledCheck;
+  ckarg(1);
+  long key = reinterpret_cast<long>(argv[0]);
+  if (s_mapTimerd.find(key) != s_mapTimerd.end()) {
+    s_mapTimerd[key].stop();
+    return (T);
+  } else {
+    return (NIL);
+  }
+}
+
+pointer ROSEUS_SET_TIMER_PERIOD_RAW(register context *ctx,int n,pointer *argv)
+{
+  isInstalledCheck;
+  ckarg(2);
+  numunion nu;
+  long key = reinterpret_cast<long>(argv[0]);
+  float period=ckfltval(argv[1]);
+  if (s_mapTimerd.find(key) != s_mapTimerd.end()) {
+    s_mapTimerd[key].setPeriod(ros::Duration(period));
+    return (T);
+  } else {
+    return (NIL);
+  }
+}
+
+pointer ROSEUS_GET_TIMER_PERIOD_RAW(register context *ctx,int n,pointer *argv)
+{
+  isInstalledCheck;
+  ckarg(1);
+  long key = reinterpret_cast<long>(argv[0]);
+  if (s_mapTimerd.find(key) != s_mapTimerd.end()) {
+    s_mapTimerd[key].stop();
+    return (T);
+  } else {
+    return (NIL);
+  }
+}
+
+pointer ROSEUS_TIMER_IS_VALID_RAW(register context *ctx,int n,pointer *argv)
+{
+  isInstalledCheck;
+  ckarg(1);
+  long key = reinterpret_cast<long>(argv[0]);
+  if (s_mapTimerd.find(key) != s_mapTimerd.end()) {
+    if (s_mapTimerd[key].isValid()) {
+      return (T);
+    }
+  }
+  return (NIL);
+}
+
 
 /************************************************************
  *   __roseus
@@ -2023,7 +2102,13 @@ pointer ___roseus(register context *ctx, int n, pointer *argv, pointer env)
   defun(ctx,"GET-URI",argv[0],(pointer (*)())ROSEUS_GET_URI, "Get the full URI to the master ");
   defun(ctx,"GET-TOPICS",argv[0],(pointer (*)())ROSEUS_GET_TOPICS, "Get the list of topics that are being published by all nodes.");
 
-  defun(ctx,"CREATE-TIMER",argv[0],(pointer (*)())ROSEUS_CREATE_TIMER, "Create periodic callbacks.");
+  defun(ctx,"CREATE-TIMER-RAW",argv[0],(pointer (*)())ROSEUS_CREATE_TIMER_RAW, "Create periodic callbacks.");
+  defun(ctx,"SHUTDOWN-TIMER-RAW",argv[0],(pointer (*)())ROSEUS_SHUTDOWN_TIMER_RAW, "Shutdown periodic callbacks.");
+  defun(ctx,"START-TIMER-RAW",argv[0],(pointer (*)())ROSEUS_START_TIMER_RAW, "Start periodic callbacks.");
+  defun(ctx,"STOP-TIMER-RAW",argv[0],(pointer (*)())ROSEUS_STOP_TIMER_RAW, "Stop periodic callbacks.");
+  defun(ctx,"SET-TIMER-PERIOD-RAW",argv[0],(pointer (*)())ROSEUS_SET_TIMER_PERIOD_RAW, "Set periodic callback period.");
+  defun(ctx,"TIMER-IS-VALID-RAW",argv[0],(pointer (*)())ROSEUS_TIMER_IS_VALID_RAW, "Check if the periodic callback is valid.");
+
 
   pointer_update(Spevalof(PACKAGE),p);
 
