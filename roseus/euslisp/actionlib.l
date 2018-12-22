@@ -85,7 +85,10 @@
   (:action-feedback-cb
    (msg)
    (ros::ros-debug "[~A] feedback-cb ~A" name-space msg)
-   (if action-feedback-cb (funcall action-feedback-cb msg)))
+   (when (and action-feedback-cb
+              (string= (send (send msg :status :goal_id) :id)
+                       (send goal_id :id)))
+     (funcall action-feedback-cb msg)))
   ;;
   (:make-goal-instance
    (&rest args)
