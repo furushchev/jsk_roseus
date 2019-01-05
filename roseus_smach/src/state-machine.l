@@ -1,11 +1,20 @@
 ;; state-machine.l
 
 ;; manipulate a list of cons as a associative array
-(defun set-alist (k v alist &key (key 'car) (test 'eq))
-  (let ((cur-cons (assoc k alist :key key :test test)))
+(defun set-alist (key value alist
+                  &key ((:key akey) 'car)
+                       ((:test atest) 'eq))
+  "Append `value` for `key` to `alist`. If `key`/`value` is already set, it is overwritten."
+  (let ((cur-cons (assoc key alist :key akey :test atest)))
     (if cur-cons
-        (progn (setf (cdr cur-cons) v) alist)
-        (nconc alist (list (cons k v))))))
+        (progn (setf (cdr cur-cons) value) alist)
+      (nconc alist (list (cons key value))))))
+
+(defun del-alist (key alist
+                  &key ((:key akey) 'car)
+                       ((:test atest) 'eq))
+  "Remove `key` and its value from `alist"
+  (setf alist (delete (assoc key alist :key akey :test atest) alist)))
 
 ;; State machine is a direction graph.
 ;; Nodes defines state, and have action.
