@@ -61,9 +61,12 @@
      (ros::ros-debug "[~A] reuslt-cb ~A ~A" name-space (send msg :status :goal_id :id) (goal-status-to-string (send msg :status :status)))
      (if (null goal_id) (return-from :action-result-cb nil))
      (when (not (send comm-state :update-result msg))
-       (ros::ros-warn "[~A] action-result-cb may recieved old client's goal" name-space)
-       (ros::ros-warn "     expected goal id ~A" (and (send comm-state :action-goal) (send (send comm-state :action-goal) :goal_id :id)))
-       (ros::ros-warn "     recieved goal id ~A" (send msg :status :goal_id :id))
+       ;;
+       ;; FIXME: comm-stateをハッシュテーブルに入れてresultが来るまで保持しておかないといけなくない？
+       ;;
+       ;; (ros::ros-warn "[~A] action-result-cb may recieved old client's goal" name-space)
+       ;; (ros::ros-warn "     expected goal id ~A" (and (send comm-state :action-goal) (send (send comm-state :action-goal) :goal_id :id)))
+       ;; (ros::ros-warn "     recieved goal id ~A" (send msg :status :goal_id :id))
        ;; https://github.com/jsk-ros-pkg/jsk_roseus/pull/519
        ;; look for exiting objects make from simple-goal-client
        (do-symbols (s (find-package "ROSACTIONLIB"))
